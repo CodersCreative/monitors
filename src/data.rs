@@ -2,7 +2,7 @@ use crate::{
     cores::{Core, CpuInfo},
     processes::Process,
 };
-use sysinfo::{Components, Cpu, Disks, LoadAvg, Networks, System, Users};
+use sysinfo::{Components, Cpu, Disks, LoadAvg, NetworkData, Networks, System, Users};
 
 pub struct Data {
     pub cpu: CpuInfo,

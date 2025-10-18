@@ -41,7 +41,7 @@ fn main() -> io::Result<()> {
     let table = TableState::default();
     let app_result = App {
         exit: false,
-        page: Page::Main,
+        page: Page::Stats1,
         dp: None,
         hrx,
         hp: None,
@@ -56,7 +56,8 @@ fn main() -> io::Result<()> {
 
 #[derive(PartialEq, Eq)]
 enum Page {
-    Main,
+    Stats1,
+    Stats2,
     Monitor,
     Processes,
     History,
@@ -96,13 +97,14 @@ impl App {
         let mut ins_txt = " ← <Left> | → <Right> | Quit <q>".to_string();
 
         let mut draw = |data: &Data| match self.page {
-            Page::Main => stats::draw(frame, main_area, &data, &self.pms),
-            Page::Monitor => cores::draw(frame, main_area, &data.cpu.cores),
+            Page::Stats1 => stats::draw_page_1(frame, main_area, &data, &self.pms),
+            Page::Stats2 => stats::draw_page_2(frame, main_area, &data),
+            Page::Monitor => cores::draw(frame, main_area, &data),
             Page::Processes => {
                 processes::draw(frame, main_area, &mut self.table, &data.processes);
                 ins_txt.push_str(" | ↑ <Up> | ↓ <Down> | Kill <k> | DeSelect <Esc>")
             }
-            Page::History => stats::draw(frame, main_area, &data, &self.pms),
+            Page::History => stats::draw_page_2(frame, main_area, &data),
         };
 
         if let Ok(data) = self.drx.try_recv() {
@@ -169,21 +171,23 @@ impl App {
         self.exit = true;
     }
 
-    fn previous(&mut self) {
+    fn next(&mut self) {
         self.page = match self.page {
-            Page::Main => Page::Processes,
-            Page::Monitor => Page::Main,
-            Page::History => Page::Monitor,
-            Page::Processes => Page::Monitor,
+            Page::Stats1 => Page::Stats2,
+            Page::Stats2 => Page::Monitor,
+            Page::Monitor => Page::Processes,
+            Page::History => Page::Processes,
+            Page::Processes => Page::Stats1,
         }
     }
 
-    fn next(&mut self) {
+    fn previous(&mut self) {
         self.page = match self.page {
-            Page::Main => Page::Monitor,
-            Page::Monitor => Page::Processes,
-            Page::History => Page::Processes,
-            Page::Processes => Page::Main,
+            Page::Stats1 => Page::Processes,
+            Page::Stats2 => Page::Stats1,
+            Page::Monitor => Page::Stats2,
+            Page::History => Page::Monitor,
+            Page::Processes => Page::Monitor,
         }
     }
 }

@@ -1,11 +1,14 @@
+use std::net::IpAddr;
+
 use hw_linux::InfoTrait;
 use ratatui::{
+    buffer::Buffer,
     layout::{Alignment, Constraint, Layout, Rect},
     style::{Color, Style},
-    widgets::{Block, BorderType, Row, Table},
+    widgets::{Block, BorderType, Gauge, List, ListItem, Row, Table, Widget},
     Frame,
 };
-use sysinfo::{Disk, Disks};
+use sysinfo::{Disk, Disks, IpNetwork, NetworkData, Networks};
 
 use crate::{
     cores::CpuInfo,
@@ -14,17 +17,18 @@ use crate::{
     packages::PackageManagers,
 };
 
-const Y: usize = 5;
-const X: usize = 2;
+const Y: usize = 6;
+const X_1: usize = 1;
+const X_2: usize = 2;
 
-pub fn draw(frame: &mut Frame, area: Rect, data: &Data, pms: &PackageManagers) {
+pub fn draw_page_1(frame: &mut Frame, area: Rect, data: &Data, pms: &PackageManagers) {
     let is_linux = hw_linux::is_linux().unwrap_or(false);
     let vertical = Layout::vertical([Constraint::Ratio(1, Y as u32); Y]);
-    let horizontal = Layout::horizontal([Constraint::Ratio(1, X as u32); X]);
+    let horizontal = Layout::horizontal([Constraint::Ratio(1, X_1 as u32); X_1]);
     let v = vertical.areas::<Y>(area);
     let mut areas = Vec::new();
     for a in v {
-        for l in horizontal.areas::<X>(a) {
+        for l in horizontal.areas::<X_1>(a) {
             areas.push(l);
         }
     }
@@ -40,60 +44,47 @@ pub fn draw(frame: &mut Frame, area: Rect, data: &Data, pms: &PackageManagers) {
     widgets.push(cpu(&data.cpu));
     widgets.push(memory(&data.memory));
 
-    for (i, widget) in widgets.into_iter().enumerate() {
+    for (i, widget) in widgets
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| i < &areas.len())
+    {
         frame.render_widget(widget, areas[i]);
     }
+}
 
-    let (dareas, mut gareas) = {
-        let used = 6;
-        let left = areas.len() - used;
-        let disk = (left as f32 * 0.6) as usize + used;
-        let mut da = Vec::new();
-        for i in used..disk {
-            da.push(areas[i]);
+pub fn draw_page_2(frame: &mut Frame, area: Rect, data: &Data) {
+    let is_linux = hw_linux::is_linux().unwrap_or(false);
+    let vertical = Layout::vertical([Constraint::Ratio(1, Y as u32); Y]);
+    let horizontal = Layout::horizontal([Constraint::Ratio(1, X_2 as u32); X_2]);
+    let v = vertical.areas::<Y>(area);
+    let mut areas = Vec::new();
+    for a in v {
+        for l in horizontal.areas::<X_2>(a) {
+            areas.push(l);
         }
-        let mut ga = Vec::new();
-        for i in disk..areas.len() - 1 {
-            ga.push(areas[i]);
-        }
-        (da, ga)
-    };
+    }
 
-    let mut free = draw_disks(&data.disks, frame, dareas);
-    free.append(&mut gareas);
+    let mut widgets = Vec::new();
 
     if is_linux {
-        draw_gpus(frame, free);
-    }
-}
-
-fn draw_gpus(frame: &mut Frame, areas: Vec<Rect>) {
-    let gpus = hw_linux::gpu::Gpus::get().unwrap();
-    let mut a = 0;
-    for g in &gpus.0 {
-        if a <= 1 {
-            frame.render_widget(gpu(g, a), areas[a]);
-            a += 1;
-        }
-    }
-}
-
-fn draw_disks(disks: &Disks, frame: &mut Frame, areas: Vec<Rect>) -> Vec<Rect> {
-    let mut a = 0;
-    let mut used = Vec::new();
-    for d in disks {
-        if a <= 1 {
-            used.push(areas[a]);
-            frame.render_widget(disk(d), areas[a]);
-            a += 1;
-        }
+        let gpus = hw_linux::gpu::Gpus::get().unwrap();
+        widgets.append(&mut gpus.0.iter().enumerate().map(|(i, x)| gpu(x, i)).collect());
     }
 
-    areas
-        .iter()
-        .filter(|x| !used.contains(x))
-        .cloned()
-        .collect::<Vec<Rect>>()
+    widgets.append(&mut data.disks.iter().map(|x| disk(x)).collect());
+    let mut networks: Vec<(&String, &NetworkData)> = data.networks.iter().collect();
+    networks.sort_by(|a, b| a.0.cmp(b.0));
+
+    widgets.append(&mut networks.into_iter().map(|x| network(x.0, x.1)).collect());
+
+    for (i, widget) in widgets
+        .into_iter()
+        .enumerate()
+        .filter(|(i, _)| i < &areas.len())
+    {
+        frame.render_widget(widget, areas[i]);
+    }
 }
 
 fn memory(memory: &Memory) -> Table<'static> {
@@ -134,22 +125,49 @@ fn memory(memory: &Memory) -> Table<'static> {
             ),
         ]),
     ];
-    let widths = [Constraint::Percentage(20), Constraint::Fill(1)];
+
+    let widths = [
+        Constraint::Percentage(25),
+        Constraint::Fill(1),
+        Constraint::Percentage(25),
+        Constraint::Fill(1),
+    ];
     let block = get_block().title("Memory");
+
+    // Gauge::default()
+    //     .percent((memory.used_mem / memory.total_mem * 100) as u16)
+    //     .label(format!("{:.2}%", (memory.used_mem / memory.total_mem)))
+    //     .block(block)
+    //     .gauge_style(Style::default().fg(Color::Rgb(137, 180, 250)));
+
     Table::new(rows, widths).block(block)
 }
 
 fn packages(pms: &PackageManagers) -> Table<'static> {
     let rows = pms
         .0
-        .iter()
-        .map(|pm| Row::new(vec![pm.name.clone(), format!("{}", pm.packages)]))
+        .windows(2)
+        .step_by(2)
+        .map(|pm| {
+            Row::new(vec![
+                pm[0].name.clone(),
+                format!("{}", pm[0].packages),
+                pm[1].name.clone(),
+                format!("{}", pm[1].packages),
+            ])
+        })
         .collect::<Vec<Row>>();
 
-    let widths = [Constraint::Percentage(20), Constraint::Fill(1)];
+    let widths = [
+        Constraint::Percentage(25),
+        Constraint::Fill(1),
+        Constraint::Percentage(25),
+        Constraint::Fill(1),
+    ];
     let block = get_block().title("Packages");
     Table::new(rows, widths).block(block)
 }
+
 fn environment() -> Table<'static> {
     let env_info = hw_linux::environment::EnvironmentInfo::get().unwrap();
     let mut rows = Vec::new();
@@ -189,19 +207,39 @@ fn disk(disk: &Disk) -> Table<'static> {
         "Mount".to_string(),
         format!("{:?}", disk.mount_point()),
     ]));
+
     rows.push(Row::new(vec![
         "Kind".to_string(),
         format!("{}", disk.kind()),
     ]));
+
     rows.push(Row::new(vec![
         "Total".to_string(),
         format!("{:.2} Gb", disk.total_space() / 1024 / 1024 / 1024),
     ]));
+
     rows.push(Row::new(vec![
         "Free".to_string(),
         format!("{:.2} Gb", disk.available_space() / 1024 / 1024 / 1024),
     ]));
-    let widths = [Constraint::Percentage(20), Constraint::Fill(1)];
+
+    rows.push(Row::new(vec![
+        "Read Only?".to_string(),
+        match disk.is_read_only() {
+            true => "Yes".to_string(),
+            false => "No".to_string(),
+        },
+    ]));
+
+    rows.push(Row::new(vec![
+        "Removable?".to_string(),
+        match disk.is_removable() {
+            true => "Yes".to_string(),
+            false => "No".to_string(),
+        },
+    ]));
+
+    let widths = [Constraint::Percentage(30), Constraint::Fill(1)];
     let block = get_block().title(format!("Disk {:?}", disk.name()));
     Table::new(rows, widths).block(block)
 }
@@ -234,7 +272,7 @@ fn host() -> Table<'static> {
         rows.push(Row::new(vec!["Session".to_string(), session.to_string()]));
     }
 
-    let widths = [Constraint::Percentage(20), Constraint::Fill(1)];
+    let widths = [Constraint::Percentage(30), Constraint::Fill(1)];
     let block = get_block().title("Host");
     Table::new(rows, widths).block(block)
 }
@@ -256,8 +294,41 @@ fn kernel() -> Table<'static> {
             get_time(uptime_s as u64),
         ]));
     }
-    let widths = [Constraint::Percentage(20), Constraint::Fill(1)];
+    let widths = [Constraint::Percentage(30), Constraint::Fill(1)];
     let block = get_block().title("Kernel");
+    Table::new(rows, widths).block(block)
+}
+
+fn network(txt: &str, network: &NetworkData) -> Table<'static> {
+    let mut rows = Vec::new();
+
+    let mut ips: Vec<&IpNetwork> = network.ip_networks().iter().collect();
+    ips.sort_by(|a, b| a.cmp(b));
+
+    for (i, ip) in ips.iter().enumerate() {
+        rows.push(Row::new(vec![
+            format!("Ip {i}"),
+            format!("{}/{}", ip.addr.to_string(), ip.prefix),
+        ]));
+    }
+
+    rows.push(Row::new(vec![
+        "Mac".to_string(),
+        network.mac_address().to_string(),
+    ]));
+
+    rows.push(Row::new(vec![
+        "Received".to_string(),
+        network.received().to_string(),
+    ]));
+
+    rows.push(Row::new(vec![
+        "Transmitted".to_string(),
+        network.transmitted().to_string(),
+    ]));
+
+    let widths = [Constraint::Percentage(30), Constraint::Fill(1)];
+    let block = get_block().title(format!("Network {:?}", txt));
     Table::new(rows, widths).block(block)
 }
 
@@ -314,7 +385,7 @@ fn cpu(cpu_info: &CpuInfo) -> Table<'static> {
         ]));
     }
 
-    let widths = [Constraint::Percentage(20), Constraint::Fill(1)];
+    let widths = [Constraint::Percentage(30), Constraint::Fill(1)];
     let block = get_block().title("CPU");
     Table::new(rows, widths).block(block)
 }
