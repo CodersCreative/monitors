@@ -21,19 +21,12 @@ const WAIT: Duration = Duration::from_millis(1000);
 
 fn main() -> io::Result<()> {
     let (dtx, drx) = mpsc::channel();
-    let (htx, hrx) = mpsc::channel::<Vec<Data>>();
     thread::spawn(move || {
         let mut sys = System::new_all();
         let user = Users::new_with_refreshed_list();
-        let mut history = Vec::new();
         loop {
             let data = Data::new(&mut sys, &user);
-            if history.len() > 99 {
-                history.remove(0);
-            }
-            history.push(data.clone());
             let _ = dtx.send(data);
-            let _ = htx.send(history.clone());
             thread::sleep(WAIT);
             sys.refresh_all();
         }
@@ -44,9 +37,7 @@ fn main() -> io::Result<()> {
     let app_result = App {
         exit: false,
         page: Page::Stats1,
-        dp: None,
-        hrx,
-        hp: None,
+        history: Vec::new(),
         table,
         drx,
         pms,
@@ -69,9 +60,7 @@ pub struct App {
     exit: bool,
     page: Page,
     drx: Receiver<Data>,
-    dp: Option<Data>,
-    hrx: Receiver<Vec<Data>>,
-    hp: Option<Vec<Data>>,
+    history: Vec<Data>,
     pms: PackageManagers,
     table: TableState,
 }
@@ -110,12 +99,15 @@ impl App {
             Page::History => pages::history::draw(frame, main_area, &history),
         };
 
-        if let (Ok(data), Ok(history)) = (self.drx.try_recv(), self.hrx.try_recv()) {
-            draw(&data, &history);
-            self.dp = Some(data);
-            self.hp = Some(history);
-        } else if let (Some(data), Some(history)) = (&self.dp, &self.hp) {
-            draw(&data, history);
+        if let Ok(data) = self.drx.try_recv() {
+            draw(&data, &self.history);
+
+            if self.history.len() > 99 {
+                self.history.remove(0);
+            }
+            self.history.push(data);
+        } else if let Some(data) = self.history.last().map(|x| x.clone()) {
+            draw(&data, &self.history);
         }
 
         frame.render_widget(
@@ -150,7 +142,7 @@ impl App {
                             KeyCode::Up => self.table.select_previous(),
                             KeyCode::Down => self.table.select_next(),
                             KeyCode::Char('k') => {
-                                if let Some(dp) = &self.dp {
+                                if let Some(dp) = &self.history.last() {
                                     let sys = System::new_all();
                                     sys.processes_by_exact_name(&dp.processes[i].name)
                                         .into_iter()
