@@ -8,7 +8,7 @@ repository = "https://github.com/CodersCreative/monitors"
 readme = "README.md"
 publish = true
 keywords = ["system", "monitor", "ratatui", "processes", "performance"]
-categories = ["cli", "accessibility"]
+categories = ["command-line-interface", "accessibility"]
 license = "MIT"
 
 
