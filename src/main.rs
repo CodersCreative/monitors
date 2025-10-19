@@ -1,8 +1,5 @@
-pub mod cores;
 pub mod data;
-pub mod packages;
-pub mod processes;
-pub mod stats;
+pub mod pages;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use ratatui::{
@@ -11,7 +8,6 @@ use ratatui::{
     DefaultTerminal, Frame,
 };
 use std::{
-    arch::x86_64::_SIDD_CMP_RANGES,
     io,
     sync::mpsc::{self, Receiver},
     thread,
@@ -19,7 +15,7 @@ use std::{
 };
 use sysinfo::{System, Users};
 
-use crate::{data::Data, packages::PackageManagers};
+use crate::data::{packages::PackageManagers, Data};
 
 const WAIT: Duration = Duration::from_millis(1000);
 
@@ -29,9 +25,15 @@ fn main() -> io::Result<()> {
     thread::spawn(move || {
         let mut sys = System::new_all();
         let user = Users::new_with_refreshed_list();
+        let mut history = Vec::new();
         loop {
             let data = Data::new(&mut sys, &user);
+            if history.len() > 99 {
+                history.remove(0);
+            }
+            history.push(data.clone());
             let _ = dtx.send(data);
+            let _ = htx.send(history.clone());
             thread::sleep(WAIT);
             sys.refresh_all();
         }
@@ -62,13 +64,14 @@ enum Page {
     Processes,
     History,
 }
+
 pub struct App {
     exit: bool,
     page: Page,
     drx: Receiver<Data>,
     dp: Option<Data>,
     hrx: Receiver<Vec<Data>>,
-    hp: Option<Data>,
+    hp: Option<Vec<Data>>,
     pms: PackageManagers,
     table: TableState,
 }
@@ -96,22 +99,23 @@ impl App {
 
         let mut ins_txt = " ← <Left> | → <Right> | Quit <q>".to_string();
 
-        let mut draw = |data: &Data| match self.page {
-            Page::Stats1 => stats::draw_page_1(frame, main_area, &data, &self.pms),
-            Page::Stats2 => stats::draw_page_2(frame, main_area, &data),
-            Page::Monitor => cores::draw(frame, main_area, &data),
+        let mut draw = |data: &Data, history: &[Data]| match self.page {
+            Page::Stats1 => pages::stats::draw_page_1(frame, main_area, &data, &self.pms),
+            Page::Stats2 => pages::stats::draw_page_2(frame, main_area, &data),
+            Page::Monitor => pages::monitor::draw(frame, main_area, &data),
             Page::Processes => {
-                processes::draw(frame, main_area, &mut self.table, &data.processes);
+                pages::processes::draw(frame, main_area, &mut self.table, &data.processes);
                 ins_txt.push_str(" | ↑ <Up> | ↓ <Down> | Kill <k> | DeSelect <Esc>")
             }
-            Page::History => stats::draw_page_2(frame, main_area, &data),
+            Page::History => pages::history::draw(frame, main_area, &history),
         };
 
-        if let Ok(data) = self.drx.try_recv() {
-            draw(&data);
+        if let (Ok(data), Ok(history)) = (self.drx.try_recv(), self.hrx.try_recv()) {
+            draw(&data, &history);
             self.dp = Some(data);
-        } else if let Some(data) = &self.dp {
-            draw(&data);
+            self.hp = Some(history);
+        } else if let (Some(data), Some(history)) = (&self.dp, &self.hp) {
+            draw(&data, history);
         }
 
         frame.render_widget(
@@ -175,7 +179,7 @@ impl App {
         self.page = match self.page {
             Page::Stats1 => Page::Stats2,
             Page::Stats2 => Page::Monitor,
-            Page::Monitor => Page::Processes,
+            Page::Monitor => Page::History,
             Page::History => Page::Processes,
             Page::Processes => Page::Stats1,
         }
@@ -187,7 +191,7 @@ impl App {
             Page::Stats2 => Page::Stats1,
             Page::Monitor => Page::Stats2,
             Page::History => Page::Monitor,
-            Page::Processes => Page::Monitor,
+            Page::Processes => Page::History,
         }
     }
 }

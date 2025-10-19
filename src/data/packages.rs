@@ -1,5 +1,4 @@
 use std::error::Error;
-use std::path::Path;
 use std::process::Command;
 
 pub struct PackageManager {
