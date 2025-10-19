@@ -1,7 +1,4 @@
-pub mod packages;
-
 use std::{ffi::OsString, path::PathBuf};
-
 use sysinfo::{DiskKind, IpNetwork, MacAddr, Pid, System, Users};
 
 #[derive(Clone, Debug)]
@@ -156,11 +153,11 @@ impl Data {
             .map(|(p, x)| Process {
                 pid: *p,
                 name: x.name().to_owned(),
-                user: users
-                    .get_user_by_id(x.user_id().unwrap())
-                    .unwrap()
-                    .name()
-                    .to_string(),
+                user: if let Some(x) = x.user_id() {
+                    users.get_user_by_id(x).unwrap().name().to_string()
+                } else {
+                    String::new()
+                },
                 command: match x.cmd().first() {
                     Some(x) => x.to_str().unwrap().to_string(),
                     None => x.name().to_str().unwrap().to_string(),

@@ -2,6 +2,7 @@ pub mod data;
 pub mod pages;
 
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
+use hw_linux::{environment::packages::PackageManagers, InfoTrait};
 use ratatui::{
     layout::{Constraint, Layout},
     widgets::{Block, Borders, TableState},
@@ -15,7 +16,7 @@ use std::{
 };
 use sysinfo::{System, Users};
 
-use crate::data::{packages::PackageManagers, Data};
+use crate::data::Data;
 
 const WAIT: Duration = Duration::from_millis(1000);
 

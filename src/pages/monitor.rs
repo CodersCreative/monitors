@@ -43,7 +43,7 @@ fn cpu(cpu: &CpuInfo) -> Gauge<'static> {
         .percent(cpu.usage as u16)
         .label(format!("{:.2}%", cpu.usage))
         .block(block)
-        .gauge_style(Style::default().fg(Color::Rgb(166, 227, 161)))
+        .gauge_style(Style::default().fg(Color::Green))
 }
 
 fn memory(mem: &Memory) -> Gauge<'static> {
@@ -55,7 +55,7 @@ fn memory(mem: &Memory) -> Gauge<'static> {
             (mem.used_mem as f64 / mem.total_mem as f64 * 100.0)
         ))
         .block(block)
-        .gauge_style(Style::default().fg(Color::Rgb(166, 227, 161)))
+        .gauge_style(Style::default().fg(Color::Green))
 }
 
 fn swap(mem: &Memory) -> Gauge<'static> {
@@ -67,7 +67,7 @@ fn swap(mem: &Memory) -> Gauge<'static> {
             (mem.used_swap as f64 / mem.total_swap as f64 * 100.0)
         ))
         .block(block)
-        .gauge_style(Style::default().fg(Color::Rgb(166, 227, 161)))
+        .gauge_style(Style::default().fg(Color::Green))
 }
 
 fn core(core: &Core) -> Gauge<'static> {
@@ -76,5 +76,5 @@ fn core(core: &Core) -> Gauge<'static> {
         .percent(core.usage as u16)
         .label(format!("{:.2}%", core.usage))
         .block(block)
-        .gauge_style(Style::default().fg(Color::Rgb(137, 180, 250)))
+        .gauge_style(Style::default().fg(Color::Blue))
 }

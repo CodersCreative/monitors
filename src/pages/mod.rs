@@ -12,6 +12,6 @@ pub mod stats;
 pub fn get_block() -> Block<'static> {
     Block::bordered()
         .title_alignment(Alignment::Center)
-        .title_style(Style::default().fg(Color::Red))
+        .title_style(Style::default().fg(Color::Blue))
         .border_type(BorderType::Rounded)
 }

@@ -1,4 +1,4 @@
-use hw_linux::InfoTrait;
+use hw_linux::{environment::packages::PackageManagers, InfoTrait};
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     widgets::{Row, Table},
@@ -6,7 +6,7 @@ use ratatui::{
 };
 
 use crate::{
-    data::{packages::PackageManagers, CpuInfo, Data, Disk, Memory, Network},
+    data::{CpuInfo, Data, Disk, Memory, Network},
     get_time,
     pages::get_block,
 };
