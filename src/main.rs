@@ -83,7 +83,7 @@ impl App {
         ]);
         let [title_bar, main_area, instruction] = main.areas(frame.area());
         frame.render_widget(
-            Block::new().borders(Borders::TOP).title("RSInfo"),
+            Block::new().borders(Borders::TOP).title("Monitors"),
             title_bar,
         );
 
