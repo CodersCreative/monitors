@@ -1,7 +1,16 @@
 [package]
-name = "rsinfo"
+name = "monitors"
 version = "0.1.0"
 edition = "2021"
+authors = ["Creative Coders <officialccoders@gmail.com>"]
+description = "A chatbot application that uses Ollama AIs."
+repository = "https://github.com/CodersCreative/ollama-chat-iced"
+readme = "README.md"
+publish = true
+keywords = ["ai", "iced", "chat", "chatbot", "ollama"]
+categories = ["gui", "accessibility"]
+license = "MIT"
+
 
 [dependencies]
 crossterm = "0.28.1"
